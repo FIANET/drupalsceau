@@ -1,0 +1,24 @@
+<?php
+
+/**
+ * Implements hook_uninstall().
+ */
+function commerce_Sceau_uninstall() {
+    db_drop_field('commerce_order', 'order_status_sceau');
+
+}
+  
+/**
+* Implementation of hook_install().
+*/
+function commerce_Sceau_install() {
+        
+$spec = array(
+    'type' => 'text',
+    'description' => "New order_status_sceau",
+    'not null' => FALSE,
+  );
+  db_add_field('commerce_order', 'order_status_sceau', $spec);
+ 
+}
+

@@ -1,0 +1,6 @@
+---
+sendrating:
+  test: >
+    https://www.fia-net.com/engine/preprod/sendrating.cgi
+  prod: >
+    https://www.fia-net.com/engine/sendrating.cgi

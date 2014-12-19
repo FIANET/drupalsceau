@@ -1,0 +1,257 @@
+<?php
+
+require_once('lib/includes/includes.inc.php');
+
+/**
+ * Implements hook_help().
+ */
+function commerce_Sceau_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#commerce_Sceau':
+      $output =  t ("FIA-NET Sceau de Confiance");
+      $output .= '<h3>' . t('A propos') . '</h3>';
+      $output .= '<p>' . t("Le module FIA-NET Sceau de Confiance permet aux internautes d'évaluer le site sur lequel ils effectuent leurs achats. Il est un gage de confiance pour les internautes.") . '</p>';
+      $output .= '<h3>' . t('Utitlisation') . '</h3>';
+      $output .= '<dl>';
+      $output .= '<dt>' . t('Côté marchand') . '</dt>';
+      $output .= '<dd>' . t("Il suffit d'installer et de configurer le module FIA-NET Sceau de Confiance. Après chaque commande validé (paiement accepté), un flux XML est automatiquement envoyé à  FIA-NET, qui s'occupe de l'envoi des questionnaires à  vos internautes. ") . '</dd>';
+      $output .= '<dt>' . t('Côté internautes') . '</dt>';
+      $output .= '<dd>' . t("Le premier questionnaire est envoyé après la commande. Les avis recueillis concernent les facteurs d'achat (confiance, disponibilitée produit, prix...).") . '</dd>';
+      $output .= '<dd>' . t("Le second questionnaire est envoyé après la livraison. Vos clients sont interrogés sur la conformitée de la livraison et sur leurs intentions de réachat.") . '</dd>';
+      return $output;
+  }
+}
+
+/**
+ * Implementation du hook_block_info()
+ */
+function commerce_Sceau_block_info(){
+$blocks = array();
+$blocks['commerce_sceau'] = array(
+    'info' => t('FIA-NET Sceau de Confiance'), 
+    'cache' => DRUPAL_CACHE_PER_ROLE, 
+    );
+return $blocks ;
+}
+
+function commerce_Sceau_block_configure($delta='') {
+  $form = array();
+ 
+  switch($delta) {
+    case 'commerce_sceau' :
+      // Text field form element
+      $form['text_body'] = array(
+        '#type' => 'text_format',
+        '#title' => t('Enter your text here in WYSIWYG format'),
+        '#default_value' => variable_get('text_variable', ''),
+      );
+ 
+      // File selection form element
+      $form['file'] = array(
+        '#name' => 'block_image',
+        '#type' => 'managed_file',
+        '#title' => t('Choose an Image File'),
+        '#description' => t('Select an Image for the custom block.  Only *.gif, *.png, *.jpg, and *.jpeg images allowed.'),
+        '#default_value' => variable_get('block_image_fid', ''),
+        '#upload_location' => 'public://block_image/',
+        '#upload_validators' => array(
+          'file_validate_extensions' => array('gif png jpg jpeg'),
+        ),
+      );
+      break;
+  }
+  return $form;
+}
+
+function commerce_Sceau_block_save($delta = '', $edit = array()) {
+  switch($delta) {
+    case 'commerce_sceau' :
+      // Saving the WYSIWYG text      
+      variable_set('text_variable', $edit['text_body']['value']);
+ 
+      // Saving the file, setting it to a permanent state, setting a FID variable
+      $file = file_load($edit['file']);
+      $file->status = FILE_STATUS_PERMANENT;
+      file_save($file);
+      $block = block_load('commerce_sceau', $delta);
+      file_usage_add($file, 'commerce_sceau', 'block', $block->bid);
+      variable_set('block_image_fid', $file->fid);
+      break;
+  }
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function commerce_Sceau_block_view($delta='') {
+  $block = array();
+ 
+  switch($delta) {
+    case 'commerce_sceau' :
+      $block['content'] = commerce_Sceau_view();
+      break;
+  }
+ return $block;
+}
+ 
+/**
+ * Custom function to assemble renderable array for block content.
+ * Returns a renderable array with the block content.
+ * @return
+ *   returns a renderable array of block content.
+ */
+function commerce_Sceau_view() {
+  $block = array();
+ 
+  // Capture the image file path and form into HTML with attributes
+  $image_file = file_load(variable_get('block_image_fid', ''));
+  $image_path = '';
+ 
+  if (isset($image_file->uri)) {
+    $image_path = $image_file->uri;
+  }
+ 
+  $image = theme_image(array(
+    'path' => ($image_path),
+    'alt' => t(''),
+    'title' => t('This is our block image.'),
+    'attributes' => array('class' => 'class_name'),
+  ));
+  // Capture WYSIWYG text from the variable
+  $text = variable_get('text_variable', '');
+  // Block output in HTML with div wrapper
+  $block = array(
+    'image' => array(
+      '#prefix' => '<div class="class_name">',
+      '#type' => 'markup',
+      '#markup' => $image,
+    ),
+    'message' => array(
+      '#type' => 'markup',
+      '#markup' => $text,
+      '#suffix' => '</div>',
+    ),
+  );
+  return $block;
+}
+    
+
+/**
+ * Implements hook_menu().
+ */
+function commerce_Sceau_menu() {
+    $items = array();
+
+    $items['admin/commerce/config/Sceau'] = array(
+        'title' => 'FIA-NET Sceau de Confiance',
+        'description' => 'Configuration du module Sceau de Confiance.',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('commerce_Sceau_settings_form'),
+        'access arguments' => array('administer store'),
+        'file' => 'commerce_Sceau.pages.inc',
+    );
+
+    return $items;
+}
+
+/**
+ * Ajout de la colonne dans le back office
+ * 'handler' => 'commerce_Sceau_handler_field_order_status_fianet',
+ */
+function commerce_Sceau_views_api() {
+    return array(
+        'api' => 3,
+    );
+}
+
+function commerce_Sceau_views_data() {
+    $data['commerce_order']['order_status_sceau'] = array(
+        'title' => t('Statut Sceau de Confiance'),
+        'help' => t('The order status sceau.'),
+        'field' => array(
+            'handler' => 'commerce_Sceau_handler_field_url_fianet',
+            'click sortable' => TRUE,
+        ),
+        'sort' => array(
+            'handler' => 'views_handler_sort_url',
+        ),
+        'filter' => array(
+            'handler' => 'views_handler_filter_url',
+        ),
+    );
+   return $data;
+}
+
+/**
+ * Implements hook_init().
+ */
+function commerce_Sceau_init() {
+    global $conf;
+    $conf['i18n_variables'][] = 'commerce_Sceau_method_title';
+    $conf['i18n_variables'][] = 'commerce_Sceau_checkout_button';
+}
+
+/*****  preparation et envoi des flux XML vers FIA-NET  ******     */
+function commerce_Sceau_commerce_order_presave($order){
+    if (isset($order->status)) {
+        if ($order->status == 'completed') {
+			$stat = db_query("SELECT order_status_sceau FROM {commerce_order} WHERE order_id = '" . $order->order_id . "' ")->fetchAll();
+			if ($stat[0]->order_status_sceau != '1') {
+				if (variable_get('commerce_sceau_activation', '') == "1") {
+					$sceau = new Sceau();
+					$sceaucontrol = new SceauControl();
+					
+					
+				
+// Recuperation des infos utilisateur                                        
+$wrapper = entity_metadata_wrapper('commerce_order', $order);
+$addressfact = $wrapper->commerce_customer_billing->commerce_customer_address->value();
+$addresslivr = $wrapper->commerce_customer_shipping->commerce_customer_address->value();
+$total = $wrapper->commerce_order_total->amount->value();
+
+
+                /******** <utilisateur> ************** */
+		$sceaucontrol->createCustomer('', 1, $addressfact['first_name'], $addressfact['last_name'], $order->mail);
+                 
+		/******** <infocommande> ************** */
+		$siteid = variable_get('commerce_sceau_siteid', '');
+					
+		/******** <montant total> ************* */
+		$order_total = db_query("SELECT commerce_order_total_amount FROM {field_data_commerce_order_total} as f, {commerce_order} as c WHERE f.revision_id = c.revision_id and f.revision_id = '" .$order->revision_id. "'")->fetchall();
+
+		$sceaucontrol->createOrderDetails($order->order_id, $siteid, $total/100, 'EUR', $_SERVER['REMOTE_ADDR'], date('Y-m-d H:i:s'),'fr');               
+
+		/******** <paiement> ************** */
+		$payement_title = explode('|',$order->data['payment_method']);
+		$paiement_type_fia = variable_get('commerce_sceau_payment_types' . $payement_title['0'],'');
+
+		$sceaucontrol->createPayment($paiement_type_fia);
+
+		/*********<Crypt>  ********************** */
+		$sceau->addCrypt($sceaucontrol);
+
+					/**************** Sending to Fia-Net ************* */
+					$mode = variable_get('commerce_sceau_status', '');
+
+					$result = $sceau->sendSendrating($sceaucontrol);
+
+					if (isXMLstringSceau($result)) {
+						$resxml = new SceauSendratingResponse($result);
+						if ($resxml->isValid()) {
+							db_query("UPDATE {commerce_order} SET order_status_sceau = '1' WHERE order_id = '" . $order->order_id . "'"); 
+							SceauLogger::insertLogSceau(__METHOD__ . " : " . __LINE__, 'Order sended');
+                                                        return true;
+						} else {
+							SceauLogger::insertLogSceau(__METHOD__ . " : " . __LINE__, 'Order '.$order->order_id.' XML send error : ' . $resxml->getDetail());
+							return false;
+						}
+					} else {
+						SceauLogger::insertLogSceau(__METHOD__ . " : " . __LINE__, 'Order '.$order->order_id.' XML send error : ' . $resxml->getDetail());
+						return false;
+					}         
+				}
+			}
+		}
+	}        
+}
+ 
